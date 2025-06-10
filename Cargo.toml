@@ -1,6 +1,6 @@
 [package]
 name = "mac-parser"
-version = "0.1.6"
+version = "0.2.0"
 edition = "2021"
 repository = "https://github.com/Frostie314159/mac-parser"
 authors = ["Frostie314159"]
@@ -9,8 +9,8 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-defmt = { version = "0.3.8", optional = true }
-scroll = { version = "0.12.0", default-features = false }
+defmt = { version = "1.0.1", optional = true }
+scroll = { version = "0.13.0", default-features = false }
 
 [features]
 debug = []

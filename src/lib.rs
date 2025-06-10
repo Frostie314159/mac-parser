@@ -85,7 +85,7 @@ impl IndexMut<usize> for MACAddress {
 }
 impl Debug for MACAddress {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        <Self as core::fmt::Display>::fmt(&self, f)
+        <Self as core::fmt::Display>::fmt(self, f)
     }
 }
 impl Display for MACAddress {
