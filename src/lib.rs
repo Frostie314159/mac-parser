@@ -1,8 +1,9 @@
 #![no_std]
 
 use core::{
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     ops::{Deref, DerefMut, Index, IndexMut},
+    str::FromStr,
 };
 
 use scroll::{
@@ -96,6 +97,22 @@ impl Display for MACAddress {
         ))
     }
 }
+impl FromStr for MACAddress {
+    type Err = scroll::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut octets = [0u8; 6];
+        for (i, v) in octets.iter_mut().enumerate() {
+            let pos = i * 3;
+            let s = s.get(pos..pos + 2).ok_or(scroll::Error::BadOffset(pos))?;
+            *v = u8::from_str_radix(s, 16).map_err(|_| scroll::Error::BadInput {
+                size: 2,
+                msg: "bad octet",
+            })?;
+        }
+        Ok(Self::from(octets))
+    }
+}
 #[cfg(feature = "defmt")]
 impl defmt::Format for MACAddress {
     fn format(&self, fmt: defmt::Formatter) {
@@ -109,5 +126,111 @@ impl defmt::Format for MACAddress {
             self[4],
             self[5]
         )
+    }
+}
+#[cfg(feature = "serde")]
+impl serde::Serialize for MACAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = heapless::String::<17, u8>::new();
+        let _ = write!(&mut s, "{self}"); // This can't reasonably fail.
+        serializer.serialize_str(&s)
+    }
+}
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for MACAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = MACAddress;
+
+            fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                f.write_str(r#"a MAC address, in string form ("11:22:33:44:55:66")"#)
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                MACAddress::from_str(v)
+                    .map_err(|_| E::invalid_value(serde::de::Unexpected::Str(v), &self))
+            }
+        }
+        deserializer.deserialize_str(Visitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_MAC: MACAddress = MACAddress::new([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
+
+    #[test]
+    fn test_read() {
+        assert_eq!(TEST_MAC, TEST_MAC.0.pread(0).unwrap());
+    }
+    #[test]
+    fn test_write() {
+        let mut data = [0u8; 6];
+        data.pwrite(TEST_MAC, 0).unwrap();
+        assert_eq!(TEST_MAC.0, data);
+    }
+
+    #[test]
+    fn test_display() {
+        use core::fmt::Write;
+
+        let mut s = heapless::String::<17>::new();
+        write!(&mut s, "{TEST_MAC}").unwrap();
+        assert_eq!(s, "11:22:33:44:55:66");
+    }
+
+    #[test]
+    fn test_from_str_valid() {
+        assert_eq!("11:22:33:44:55:66".parse::<MACAddress>().unwrap(), TEST_MAC);
+    }
+    #[test]
+    fn test_from_str_valid_dashes() {
+        assert_eq!("11-22-33-44-55-66".parse::<MACAddress>().unwrap(), TEST_MAC);
+    }
+    #[test]
+    fn test_from_str_with_trailing() {
+        assert_eq!(
+            "11:22:33:44:55:66:77".parse::<MACAddress>().unwrap(),
+            TEST_MAC
+        );
+    }
+    #[test]
+    fn test_from_str_too_short() {
+        assert!(matches!(
+            "11:22:33:44:55".parse::<MACAddress>(),
+            Err(scroll::Error::BadOffset(15))
+        ));
+    }
+    #[test]
+    fn test_from_str_bad_hex() {
+        assert!(matches!(
+            "QQ:WW:EE:RR:TT:YY".parse::<MACAddress>(),
+            Err(scroll::Error::BadInput { size: 2, .. })
+        ));
+    }
+
+    #[test]
+    fn test_serialize_json() {
+        let s = serde_json::to_string(&[TEST_MAC]).unwrap();
+        assert_eq!(r#"["11:22:33:44:55:66"]"#, &s);
+    }
+    #[test]
+    fn test_deserialize_json() {
+        const JSON: &str = r#"["11:22:33:44:55:66"]"#;
+        assert_eq!(
+            [TEST_MAC],
+            serde_json::from_str::<[MACAddress; 1]>(JSON).unwrap()
+        );
     }
 }
