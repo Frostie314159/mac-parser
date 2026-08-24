@@ -16,3 +16,6 @@ scroll = { version = "0.13.0", default-features = false }
 debug = []
 default = ["debug"]
 defmt = ["dep:defmt"]
+
+[dev-dependencies]
+heapless = "0.9.3"

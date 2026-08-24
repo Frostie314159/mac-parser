@@ -111,3 +111,30 @@ impl defmt::Format for MACAddress {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_MAC: MACAddress = MACAddress::new([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
+
+    #[test]
+    fn test_read() {
+        assert_eq!(TEST_MAC, TEST_MAC.0.pread(0).unwrap());
+    }
+    #[test]
+    fn test_write() {
+        let mut data = [0u8; 6];
+        data.pwrite(TEST_MAC, 0).unwrap();
+        assert_eq!(TEST_MAC.0, data);
+    }
+
+    #[test]
+    fn test_display() {
+        use core::fmt::Write;
+
+        let mut s = heapless::String::<17>::new();
+        write!(&mut s, "{TEST_MAC}").unwrap();
+        assert_eq!(s, "11:22:33:44:55:66");
+    }
+}
