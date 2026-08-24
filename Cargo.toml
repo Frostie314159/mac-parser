@@ -10,12 +10,16 @@ readme = "README.md"
 
 [dependencies]
 defmt = { version = "1.0.1", optional = true }
+heapless = { version = "0.9.3", optional = true, features = ["serde"] }
 scroll = { version = "0.13.0", default-features = false }
+serde = { version = "1.0.229", optional = true, default-features = false }
 
 [features]
 debug = []
 default = ["debug"]
 defmt = ["dep:defmt"]
+serde = ["dep:serde", "dep:heapless"]
 
 [dev-dependencies]
 heapless = "0.9.3"
+serde_json = { version = "1.0.151", default-features = false, features = ["alloc"] }

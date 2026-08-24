@@ -1,7 +1,7 @@
 #![no_std]
 
 use core::{
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     ops::{Deref, DerefMut, Index, IndexMut},
     str::FromStr,
 };
@@ -128,6 +128,41 @@ impl defmt::Format for MACAddress {
         )
     }
 }
+#[cfg(feature = "serde")]
+impl serde::Serialize for MACAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = heapless::String::<17, u8>::new();
+        let _ = write!(&mut s, "{self}"); // This can't reasonably fail.
+        serializer.serialize_str(&s)
+    }
+}
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for MACAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = MACAddress;
+
+            fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                f.write_str(r#"a MAC address, in string form ("11:22:33:44:55:66")"#)
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                MACAddress::from_str(v)
+                    .map_err(|_| E::invalid_value(serde::de::Unexpected::Str(v), &self))
+            }
+        }
+        deserializer.deserialize_str(Visitor)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -183,5 +218,19 @@ mod tests {
             "QQ:WW:EE:RR:TT:YY".parse::<MACAddress>(),
             Err(scroll::Error::BadInput { size: 2, .. })
         ));
+    }
+
+    #[test]
+    fn test_serialize_json() {
+        let s = serde_json::to_string(&[TEST_MAC]).unwrap();
+        assert_eq!(r#"["11:22:33:44:55:66"]"#, &s);
+    }
+    #[test]
+    fn test_deserialize_json() {
+        const JSON: &str = r#"["11:22:33:44:55:66"]"#;
+        assert_eq!(
+            [TEST_MAC],
+            serde_json::from_str::<[MACAddress; 1]>(JSON).unwrap()
+        );
     }
 }
