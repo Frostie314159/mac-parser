@@ -3,6 +3,7 @@
 use core::{
     fmt::{Debug, Display},
     ops::{Deref, DerefMut, Index, IndexMut},
+    str::FromStr,
 };
 
 use scroll::{
@@ -96,6 +97,22 @@ impl Display for MACAddress {
         ))
     }
 }
+impl FromStr for MACAddress {
+    type Err = scroll::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut octets = [0u8; 6];
+        for (i, v) in octets.iter_mut().enumerate() {
+            let pos = i * 3;
+            let s = s.get(pos..pos + 2).ok_or(scroll::Error::BadOffset(pos))?;
+            *v = u8::from_str_radix(s, 16).map_err(|_| scroll::Error::BadInput {
+                size: 2,
+                msg: "bad octet",
+            })?;
+        }
+        Ok(Self::from(octets))
+    }
+}
 #[cfg(feature = "defmt")]
 impl defmt::Format for MACAddress {
     fn format(&self, fmt: defmt::Formatter) {
@@ -136,5 +153,35 @@ mod tests {
         let mut s = heapless::String::<17>::new();
         write!(&mut s, "{TEST_MAC}").unwrap();
         assert_eq!(s, "11:22:33:44:55:66");
+    }
+
+    #[test]
+    fn test_from_str_valid() {
+        assert_eq!("11:22:33:44:55:66".parse::<MACAddress>().unwrap(), TEST_MAC);
+    }
+    #[test]
+    fn test_from_str_valid_dashes() {
+        assert_eq!("11-22-33-44-55-66".parse::<MACAddress>().unwrap(), TEST_MAC);
+    }
+    #[test]
+    fn test_from_str_with_trailing() {
+        assert_eq!(
+            "11:22:33:44:55:66:77".parse::<MACAddress>().unwrap(),
+            TEST_MAC
+        );
+    }
+    #[test]
+    fn test_from_str_too_short() {
+        assert!(matches!(
+            "11:22:33:44:55".parse::<MACAddress>(),
+            Err(scroll::Error::BadOffset(15))
+        ));
+    }
+    #[test]
+    fn test_from_str_bad_hex() {
+        assert!(matches!(
+            "QQ:WW:EE:RR:TT:YY".parse::<MACAddress>(),
+            Err(scroll::Error::BadInput { size: 2, .. })
+        ));
     }
 }
